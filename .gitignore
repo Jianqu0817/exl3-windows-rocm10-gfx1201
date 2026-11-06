@@ -1,0 +1,16 @@
+/python/
+/cache/
+/tmp/
+/logs/
+/state/
+__pycache__/
+*.pyc
+/build/
+*.log
+*.prev
+*.bak*
+.pytest_cache/
+
+/reference/
+
+/snapshots/

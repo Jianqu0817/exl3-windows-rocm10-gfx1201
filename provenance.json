@@ -1,0 +1,30 @@
+{
+  "created_at": "2026-11-06T20:58:29.184594+00:00",
+  "target": "Windows x64 / AMD gfx1201",
+  "exllamav3_base_commit": "bd1f519172406a9560bd5c90e61000691bb69a07",
+  "python": "3.12.0",
+  "torch": "2.13.0+rocm10.1.0",
+  "triton_windows": "3.7.1.post27",
+  "model_weights": "External shared model folders selected through models.json",
+  "native_extensions": {
+    "exllamav3_ext.pyd": "6ab6cf3a1872dbd38f4b1534670d04079fa29dd41fc89e46271b9508bd17c1f6",
+    "hip_utils.pyd": "88a529dc76e90a9876bd568bdd0df4185216eeb19ae67518f519ec5ac774adaf"
+  },
+  "app_source_commit": "bd1f519172406a9560bd5c90e61000691bb69a07",
+  "native_build": {
+    "artifact_bytes": 21080064,
+    "gpu_arch": "gfx1201",
+    "wmma_max_rows": 32,
+    "compiler_sdk": "10.0.0rc4",
+    "torch_build": "2.13.0+rocm10.0.0rc4"
+  },
+  "windows_base_commit": "d20e8dd71c97f637e0a975c37a38583799ecb163",
+  "recipe_commit": "fe77c7b430b27232959d8fa19cb0de6f8640178c",
+  "local_decode_optimizations": {
+    "app/exllamav3/generator/generator.py": "69a77d7f531cd7c66b2e60bbedb33d6f8165b6b8a64806b15f0fc5f8affcf90a",
+    "app/exllamav3/generator/job.py": "16771776dc239ea76a16861115aa424edade9357767125a196ffff2f366b29aa",
+    "app/exllamav3/architecture/dflash2.py": "130f166db08f71805f89378abba5fcf83884791a3c5949a13e8eed5ab44bc587",
+    "runtime.py": "a38c6788a18960cb4d4a1d4d272f102c4e08d3e562ecaee5692e0bd3ba2ac84d",
+    "start_huihui.cmd": "33f151263b2a81754fc70c2bfd4400b0ccd4dc1c03c31cf208794cd5e42333a6"
+  }
+}
