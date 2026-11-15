@@ -196,10 +196,24 @@ class HFTemplate:
         self.bos, self.eos = bos or '', eos or ''
 
     def render(self, messages, think, extra=None, tools=None):
+        if messages[-1]['role'] == 'assistant' and not messages[-1]['content'] and not messages[-1].get('reasoning_content'):
+            messages = messages[:-1]
+        continuing = bool(messages and messages[-1]['role'] == 'assistant')
         values = dict(extra or {})
-        values.update(messages=messages, add_generation_prompt=True, enable_thinking=think,
+        values.update(messages=messages, add_generation_prompt=not continuing, enable_thinking=think,
                       bos_token=self.bos, eos_token=self.eos, tools=tools)
-        return self.template.render(**values)
+        if continuing:
+            # Mark the end of the prefix so template terminators can be removed without
+            # hardcoding model-specific tokens or trimming the client's trailing whitespace.
+            marker = '__EXL3_CONTINUE_' + uuid.uuid4().hex + '__'
+            final = {**messages[-1], 'content': messages[-1]['content'] + marker}
+            values['messages'] = [*messages[:-1], final]
+        text = self.template.render(**values)
+        if continuing:
+            if marker not in text:
+                raise ValueError('聊天模板未保留 assistant 續寫前綴')
+            text = text.rsplit(marker, 1)[0]
+        return text
 
 
 def image_url(part):
@@ -293,11 +307,11 @@ def template_call(call):
 
 def template_messages(messages, image=None):
     """OpenAI messages -> the model's chat template input: text content, tool results, the assistant's tool calls and
-    the reasoning of earlier turns (so the history renders as the model wrote it); consecutive user turns merged.
+    the reasoning of earlier turns; system instructions collected at the beginning, consecutive user turns merged.
     image(url) turns a user's image part into the embedding placeholder text (None: images rejected)."""
     if not isinstance(messages, list) or not messages:
         raise ValueError('messages 必須是非空陣列')
-    out = []
+    out, systems = [], []
     for msg in messages:
         if not isinstance(msg, dict):
             raise ValueError('messages 每項須是物件')
@@ -305,6 +319,9 @@ def template_messages(messages, image=None):
         if role not in ('system', 'user', 'assistant', 'tool'):
             raise ValueError('支援 system、user、assistant、tool 訊息')
         m = {'role': role, 'content': text_content(msg.get('content'), image if role == 'user' else None)}
+        if role == 'system':
+            systems.append(m['content'])
+            continue
         if role == 'assistant':
             if isinstance(msg.get('reasoning_content'), str) and msg['reasoning_content']:
                 m['reasoning_content'] = msg['reasoning_content']
@@ -319,7 +336,9 @@ def template_messages(messages, image=None):
             out[-1]['content'] += '\n\n' + m['content']
         else:
             out.append(m)
-    if out[-1]['role'] not in ('user', 'tool'):
+    if systems:
+        out.insert(0, {'role': 'system', 'content': '\n\n'.join(systems)})
+    if out[-1]['role'] not in ('user', 'tool', 'assistant') or out[-1].get('tool_calls'):
         raise ValueError('對話須以 user 或 tool 訊息結尾')
     return out
 
@@ -950,9 +969,18 @@ class Engine:
                     load_args = copy.copy(self.args)
                     load_args.cache_size = self.args.cache_size * self.parallel
                     load_args.autosplit_max_batch_size = self.parallel
-                    model, self.config, self.cache, self.tokenizer, draft_model, _, draft_cache = model_init.init(
+                    load = model_init.init
+                    if (os.environ.get("EXL3_DECODE_PLACEMENT") in ("probe", "head-first") and not portable
+                            and self.parallel == 1 and not load_args.tensor_parallel and load_args.gpu_split in (None, "auto")):
+                        from gfx1201_decode import load_for_decode
+                        load = load_for_decode
+                    loaded = load(
                         load_args, min_draft_len=portable.c.slots if portable else None,
                         override_dynamic_seq_len=self.args.cache_size)
+                    if loaded is None:
+                        from gfx1201_decode import RESTART_HEAD_FIRST
+                        return RESTART_HEAD_FIRST
+                    model, self.config, self.cache, self.tokenizer, draft_model, _, draft_cache = loaded
                 finally:
                     self.args.draft_model_dir = draft_path
                 if portable:
@@ -1127,8 +1155,16 @@ class Engine:
         if think and not self.hf_template:
             actual_effort = '內建模板（不區分強度）'
         log(f"[思考] 請求 {requested_effort or 'default'} → 模型 {actual_effort}")
+        complete_sentences = body.get('ensure_sentence_end', self.args.complete_sentences)
+        if not isinstance(complete_sentences, bool):
+            raise ValueError('ensure_sentence_end 必須是 boolean')
+        filters = None
+        if complete_sentences and not tools:
+            from sentence_end import create_sentence_end_guard
+            guard, sampler = create_sentence_end_guard(self.tokenizer, self.stop_ids, sampler)
+            filters = [guard]
         return self.Job(input_ids=ids, max_new_tokens=limit, sampler=sampler,
-            stop_conditions=stop + extra_stop, seed=seed, embeddings=embeddings or None), limit, implicit, \
+            stop_conditions=stop + extra_stop, seed=seed, embeddings=embeddings or None, filters=filters), limit, implicit, \
             int(ids.shape[-1]), tools
 
 
@@ -1376,7 +1412,8 @@ class Handler(BaseHTTPRequestHandler):
             emit(parsed.feed('', final=True), final=True)
             terminal = terminal or {}
             usage = {'prompt_tokens': terminal.get('prompt_tokens', prompt_count),
-                'completion_tokens': terminal.get('new_tokens', live.timings()['predicted_n'])}
+                'completion_tokens': terminal.get('new_tokens', live.timings()['predicted_n']),
+                'prompt_tokens_details': {'cached_tokens': terminal.get('cached_tokens') or 0}}
             usage['total_tokens'] = usage['prompt_tokens'] + usage['completion_tokens']
             seconds = terminal.get('time_generate', 0)
             reason = 'stop' if terminal.get('eos_reason') != 'max_new_tokens' else 'length'
@@ -1391,7 +1428,13 @@ class Handler(BaseHTTPRequestHandler):
                     if terminal.get('time_prefill') else None,
                 'cached_tokens': terminal.get('cached_tokens'),
                 'accepted_draft_tokens': terminal.get('accepted_draft_tokens'),
-                'rejected_draft_tokens': terminal.get('rejected_draft_tokens'), 'cancelled': state.cancelled.is_set()}
+                'rejected_draft_tokens': terminal.get('rejected_draft_tokens'), 'cancelled': state.cancelled.is_set(),
+                'eos_reason': terminal.get('eos_reason'),
+                'eos_token_id': terminal.get('eos_triggering_token_id'),
+                'eos_token_text': terminal.get('eos_triggering_token_str'),
+                'held_text_chars': len((terminal.get('held') or {}).get('text', '')),
+                'raw_completion_chars': len(terminal.get('full_completion', '')),
+                'content_chars': len(output['content'])}
             engine.latest = {'request_id': rid, 'usage': usage, **metrics}
             timings = live.timings(terminal or None)
             if streaming:
@@ -1405,6 +1448,8 @@ class Handler(BaseHTTPRequestHandler):
                         'finish_reason': reason}],
                     'usage': usage, 'timings': timings, 'exl3': metrics})
             log(f'[{rid}] ' + speed_line(timings, state.cancelled.is_set(), '按下停止'))
+            log(f'[{rid}] 結束原因={metrics["eos_reason"]}，token={metrics["eos_token_id"]}，'
+                f'待發文字={metrics["held_text_chars"]} 字元')
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
         except (ValueError, TypeError, KeyError) as exc:
@@ -1438,6 +1483,8 @@ def main():
     parser.add_argument('--alias', default=None)
     parser.add_argument('--chat-mode', default='auto')
     parser.add_argument('--thinking', choices=['on', 'off', 'auto'], default='on')
+    parser.add_argument('--complete-sentences', action='store_true',
+                        help='中文 RP：半句 EOS 時補至句末再結束；單請求 ensure_sentence_end 可覆蓋')
     parser.add_argument('--reasoning-effort', default=None)
     parser.add_argument('--parallel', type=int, choices=range(1, 9), default=2,
                         help='同時生成數（1～8）；-cs 是每路 Context，總 KV 容量為 -cs × 路數')
@@ -1464,7 +1511,13 @@ def main():
     server.daemon_threads = True
     server.engine = engine
     print('EXL3_HTTP_LISTEN', args.host, args.port, flush=True)
-    threading.Thread(target=engine.load, daemon=True).start()
+    restart = []
+    def load_engine():
+        code = engine.load()
+        if code is not None:   # throughput preset requested a fresh process before readiness
+            restart.append(code)
+            server.shutdown()
+    threading.Thread(target=load_engine, daemon=True).start()
     try:
         server.serve_forever(poll_interval=0.25)
     except KeyboardInterrupt:
@@ -1473,6 +1526,8 @@ def main():
         if engine.scheduler:
             engine.scheduler.close()
         server.server_close()
+    if restart:
+        raise SystemExit(restart[0])
 
 
 if __name__ == '__main__':

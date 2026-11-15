@@ -493,6 +493,10 @@ class Linear(Module):
             [["sv", "svh"], ["su", "suh"], "trellis"]
         )
 
+    def preload_exl3_trellis(self, device: torch.device):
+        """Place the packed weight early; normal load still builds all executable state."""
+        self._early_trellis = self.config.stc.get_tensor(self.key + ".trellis", device, no_defer=True)
+
     def load_exl3(self, key: str) -> bool:
         if not self.is_exl3_storage(key):
             return False
@@ -508,7 +512,11 @@ class Linear(Module):
         suh = opt(".suh", self.device)
         sv = opt(".sv", self.device, no_defer = True)
         svh = opt(".svh", self.device)
-        trellis = stc.get_tensor(key + ".trellis", self.device)
+        trellis = self.__dict__.pop("_early_trellis", None)
+        if trellis is not None and (self.device != trellis.device or key != self.key):
+            trellis = None
+        if trellis is None:
+            trellis = stc.get_tensor(key + ".trellis", self.device)
         mcg = stc.get_codebook_marker(key + ".mcg", codebook_mcg_mult)
         mul1 = stc.get_codebook_marker(key + ".mul1", codebook_mul1_mult)
         bias = opt(".bias", self.device)

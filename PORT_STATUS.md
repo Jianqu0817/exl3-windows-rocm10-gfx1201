@@ -1,3 +1,5 @@
+> 历史基线文档。当前可用入口与实测请看 [README](README.md) 和 [完整工作流](docs/WORKFLOW.md)。
+
 # 原生 Windows / ROCm 10 移植记录
 
 目标：将 parth-thakre/exl3-rdna4-recipe 的固定版本移植到 RX 9070 XT / gfx1201 的原生 Windows 环境。

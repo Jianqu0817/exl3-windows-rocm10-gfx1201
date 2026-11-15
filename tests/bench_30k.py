@@ -23,13 +23,22 @@ def main():
     parser.add_argument('--output-tokens', type=int, default=512)
     parser.add_argument('--runs', type=int, default=3)
     parser.add_argument('--profile', action='store_true')
+    parser.add_argument('--prompt-dir', default=str(Path(__file__).resolve().parent / 'fixtures/30k'))
+    parser.add_argument('--m4-ab', action='store_true')
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(exist_ok=True, parents=True)
     (out / 'benchmark.pid').write_text(str(os.getpid()))
     started = time.perf_counter()
     with torch.inference_mode():
-        model, config, cache, tok, dmodel, _, dcache = model_init.init(args)
+        if os.environ.get("EXL3_DECODE_PLACEMENT") in ("probe", "head-first"):
+            from gfx1201_decode import load_for_decode, RESTART_HEAD_FIRST
+            loaded = load_for_decode(args)
+            if loaded is None:
+                raise SystemExit(RESTART_HEAD_FIRST)
+        else:
+            loaded = model_init.init(args)
+        model, config, cache, tok, dmodel, _, dcache = loaded
     profiler = None
     if args.profile:
         import sys
@@ -45,15 +54,28 @@ def main():
             'hip': torch.version.hip, 'effective_exl3_environment': {k:v for k,v in os.environ.items() if k.startswith('EXL3_')}, 'args': vars(args), 'pid': os.getpid(),
             'load_seconds': time.perf_counter() - started,
             'method': 'greedy; no vision; no drafting unless explicitly enabled; fresh generator per request; 0 cached tokens required',
-            'fixture': 'E:/LLM_local_NInfer_SPK_test/benchmarks/tasks/rp30000.tasks',
+            'fixture': args.prompt_dir or 'E:/LLM_local_NInfer_SPK_test/benchmarks/tasks/rp30000.tasks',
             'tuning': {k:os.environ.get(k) for k in ('EXL3_DEC_GROUP', 'EXL3_DEC_Q4W',
                        'EXL3_DEC_WARPS', 'EXL3_DEC_BLOCK_N', 'EXL3_DEC_STAGES', 'EXL3_GRAPHS')}}
+    info["placement"] = {"head": str(model.modules[model.logit_layer_idx].device),
+                         "target_blocks": sorted({str(b.device) for b in model.modules if hasattr(b,"attn")}),
+                         "selector": str(dmodel.selector.device) if hasattr(dmodel,"selector") else None}
     print('LOAD_COMPLETE', json.dumps(info), flush=True)
 
     def encode(text):
         return tok.encode(text, add_bos=False, encode_special_tokens=True)
 
     def prompt(run, target):
+        if args.prompt_dir:
+            name = 'warmup' if run == 'warmup' or target == 1024 else 'cold30k-1'
+            source = Path(args.prompt_dir) / f'{name}.prompt.txt'
+            raw = source.read_bytes()
+            ids = encode(raw.decode('utf-8').replace('\r\n', '\n'))
+            assert ids.shape[-1] == target, (source, ids.shape[-1], target)
+            (out / f'{run}.fixture.json').write_text(json.dumps({'source': str(source),
+                'source_sha256': hashlib.sha256(raw).hexdigest(), 'prepared_tokens': target,
+                'change': 'Exact archived prepared prompt; source task files no longer present.'}, indent=2), encoding='utf-8')
+            return ids
         name = 'rp512.tasks' if run == 'warmup' else 'rp30000.tasks'
         source = Path('E:/LLM_local_NInfer_SPK_test/benchmarks/tasks') / name
         raw = source.read_bytes()
@@ -116,6 +138,7 @@ def main():
         completion = last['full_completion']
         (out / f'{label}.completion.txt').write_text(completion, encoding='utf-8')
         row = {'label': label, 'measured': measured, 'started_at': wall_start,
+               'm4_fdot2': os.environ.get('EXL3_GEMV_M4_FDOT2', '0'),
                'finished_at': time.time(), 'prompt_tokens': last['prompt_tokens'],
                'output_tokens': last['new_tokens'], 'cached_tokens': last['cached_tokens'],
                'prefill_seconds': last['time_prefill'], 'prefill_tps': last['prompt_tokens']/last['time_prefill'],
@@ -141,10 +164,19 @@ def main():
 
     run('warmup', prompt('warmup', 1024), 512, False)
     for i in range(args.runs):
-        run(f'cold30k-{i+1}', prompt(f'cold30k-{i+1}', args.input_tokens), args.output_tokens, True)
+        if args.m4_ab:
+            for enabled in ((0, 1) if i % 2 == 0 else (1, 0)):
+                os.environ['EXL3_GEMV_M4_FDOT2'] = str(enabled)
+                label = f'm4-{enabled}-{i+1}'
+                run(label, prompt(label, args.input_tokens), args.output_tokens, True)
+        else:
+            run(f'cold30k-{i+1}', prompt(f'cold30k-{i+1}', args.input_tokens), args.output_tokens, True)
     measured = [r for r in rows if r['measured']]
     summary = {key: statistics.median(r[key] for r in measured) for key in
                ('prefill_tps', 'prefill_seconds', 'generate_tps', 'observed_first_token_seconds', 'wall_seconds')}
+    if args.m4_ab:
+        summary = {str(enabled): {key: statistics.median(r[key] for r in measured if r['m4_fdot2'] == str(enabled))
+                   for key in summary} for enabled in (0, 1)}
     (out / 'results.json').write_text(json.dumps({'environment': info, 'runs': rows, 'median': summary}, ensure_ascii=False, indent=2), encoding='utf-8')
     print('BENCH_COMPLETE', json.dumps(summary), flush=True)
 

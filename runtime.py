@@ -10,7 +10,7 @@ import sys
 import traceback
 
 ROOT = Path(__file__).resolve().parent
-PYROOT = Path(r'D:\LLM_local\tools\exl3-gfx1201\python')
+PYROOT = Path(sys.executable).resolve().parent
 SITE = PYROOT / 'Lib/site-packages'
 if os.name != 'nt':
     raise SystemExit('Native Windows is required')
@@ -31,7 +31,7 @@ for key, rel in {
     os.environ[key] = str(path)
 os.environ['PYTHONUTF8'] = '1'
 os.environ['PYTHONNOUSERSITE'] = '1'
-os.environ['EXL3_GRAPHS'] = '0'
+os.environ.setdefault('EXL3_GRAPHS', '0')
 os.environ.setdefault('EXL3_DECODE_PIPELINE', '1')
 os.environ.setdefault('EXL3_DFLASH_HEAD_WINDOW', '1')
 if os.environ.get('EXL3_TUNING', '1') == '0':

@@ -1,50 +1,31 @@
-# ExLlamaV3 on native Windows + ROCm 10 — AMD RX 9070 XT (gfx1201)
+# RX 9070 XT 上的本地酒馆：Windows ROCm 10.1 + EXL3
 
-将 [ExLlamaV3](https://github.com/turboderp/exllamav3) 1.6.6 与 [parth-thakre/exl3-rdna4-recipe](https://github.com/parth-thakre/exl3-rdna4-recipe) 的 RDNA4 优化补丁移植到 **Windows 原生 ROCm 10.1**(HIP 7.16),面向 **RX 9070 XT / gfx1201**——不需要 WSL 或 Linux 容器。
+在原生 Windows 上用 16 GB RX 9070 XT 运行 27B EXL3 模型，并通过 OpenAI 兼容接口连接 TauriTavern。引擎为 ExLlamaV3 1.6.6，含 RDNA4 内核、匹配的预编译扩展和 DFlash2 草稿支持。不需要 WSL。
 
-> Native Windows port of ExLlamaV3 1.6.6 + RDNA4 recipe optimizations, running on AMD RX 9070 XT (gfx1201) with ROCm 10.1 — no WSL needed.
+**日常长聊天首选 64K。** 实际输入 64,000 token、连续生成 512 token 的两条中文 RP 分别为 **44.51 / 41.35 decode tok/s**。最低的连续 128-token 窗口为 **39.38**；另一次真实 64K 服务即使修复了输出头慢态，也只跑到 **32.58**。这些是具体负载下的结果，不是 40 tok/s 保底。
 
-## 实测性能(RX 9070 XT 16GB, Ryzen 7 7700)
+## 启动 64K
 
-27B EXL3 3.0bpw 主模型 + DFlash2 草稿(深度 3)、Q4 KV、32K 上下文、30K token 输入冷基准:
+1. 克隆本仓库。准备 Windows x64 的 **Python 3.12、torch 2.13.0+rocm10.1.0、Windows Triton 3.7.1.post27** 配套环境。可从 [Windows 基线项目的 Releases](https://github.com/BBQ2077/exl3-windows-gfx1201/releases) 获取对应 A-python 包；使用本仓库的源码与 `native/`，不要再用旧 B-app 包覆盖。A 包解压后若有仓库根目录下的 `python/python.exe`，不必设置 `EXL3_PYTHON`。
+2. 准备 [Huihui 27B EXL3 3.0 bpw 主模型](https://huggingface.co/grimlee/Huihui-Qwen3.8-27B-abliterated-EXL3-3.0bpw) 和匹配的 EXL3 DFlash2 草稿。实测使用本地中文 RP 微调草稿，仓库不含模型权重；换用原版草稿，生成速度可能不同。
+3. 在仓库目录的 PowerShell 中运行（将路径换成自己的）：
 
-| 指标 | 数值 |
-|---|---:|
-| prefill | ~1300 tok/s |
-| 推测解码(spec decode) | ~42 tok/s(接受率 ~23%) |
-| 前缀缓存命中后 prefill | ~0.26 s / 133 token(比上游阈值默认快 4.3×) |
+```powershell
+$env:EXL3_PYTHON    = 'D:\EXL3-runtime\python\python.exe'  # 若运行时不在仓库中
+$env:EXL3_MODEL_DIR = 'D:\Models\Huihui-Qwen3.8-27B-abliterated-EXL3-3.0bpw'
+$env:EXL3_DRAFT_DIR = 'D:\Models\Qwen3.8-27B-DFlash2-EXL3-3.0bpw-tuned'
+.\start_tauritavern_64k.cmd
+```
 
-prefill 与 Linux ROCm 参考栈持平;decode 达 WSL 参考的 ~96%。
+4. 看到 `EXL3_SERVER_READY` 后，打开 **TauriTavern 客户端** → 聊天补全 → 导入 [64K 预设](integrations/tauritavern/EXL3-Huihui-RP-64K.json)，选择「原样导入」并保留连接绑定。地址是 `http://127.0.0.1:18543/v1`，模型名 `huihui-qwen3.8-27b`，API key 留空。启动脚本启动的是本地后端，不会替你安装或修改客户端。
 
-## 仓库内容
+| 用途 | 后端入口 | [导入同容量的酒馆预设](integrations/tauritavern/) |
+|---|---|---|
+| 较短对话 / 30K 基准 | `start_tauritavern.cmd` | EXL3-Huihui-RP.json |
+| 日常长对话 | `start_tauritavern_64k.cmd` | EXL3-Huihui-RP-64K.json |
+| 需要更长历史 | `start_tauritavern_120k.cmd` | EXL3-Huihui-RP-120K.json |
+| 主要验证容量 | `start_tauritavern_128k.cmd` | EXL3-Huihui-RP-128K.json |
 
-- `app/exllamav3` — 完整源码(含 RDNA4 recipe 补丁与 Windows clang-cl/AVX 适配、本轮的 reconstruct 阈值修正)
-- `native/exllamav3_ext.pyd` — **预编译原生扩展**(gfx1201,含 WMMA GEMV / Q4 attention 优化),免编译直接用
-- `runtime.py` / `server.cmd` / `start_huihui.cmd` — 运行入口与 API 启动器示例
-- `tests/` — 数值等价性、kernel/attention 冒烟、30K 基准等验证脚本
-- `tools/build/` — 受控构建脚本(`prepare_port.ps1` + `guarded_build.py`,改原生代码时用)
-- `licenses/` — 上游许可(ExLlamaV3 MIT、ROCm、AGPL 组件等)
+**[完整工作流：显存准备 → 启动与慢态恢复 → 实际测速 → 切回游戏](docs/WORKFLOW.md)** · [显存工具说明](tools/cleanup_vram.md) · [编译原生扩展](BUILD.md)
 
-## 快速开始
-
-1. 准备 Windows Python 运行时:PyTorch `2.13.0+rocm10.1.0` + Windows Triton(原生 ROCm for Windows),详见 [README.windows-base.md](README.windows-base.md) 与 [BUILD.md](BUILD.md)。
-2. `python -I -X utf8 -u runtime.py script <你的脚本.py> -m <模型目录> ...`(`runtime.py` 负责加载预编译扩展、设置 ROCm/Triton 环境)。
-3. API 服务示例:`server.cmd -m <模型> -dm <DFlash2 草稿> -ndt 3 -cs 32768 -cq 4`。
-4. 验证安装:`port.cmd verify`(Torch/Triton/EXL3 数值检查)、`port.cmd script tests/port_kernel_smoke.py`。
-
-模型不随仓库分发;量化转换用上游 `exllamav3.conversion.convert_model`。
-
-## 说明与限制
-
-- 预编译 `.pyd` 仅适用于 gfx1201;其他 RDNA4 GPU(gfx110x 等)需用 `tools/build` 重新编译。
-- 仅在 RX 9070 XT + Windows 11 + ROCm 10.1 验证;上游 ExLlamaV3 支持的模型架构均保留(`supported-architectures.json`)。
-- 上游 recipe 的部分实验特性(64 行 GEMV 调优、随机 DFlash 拒绝采样)未并入。
-
-## 来源与致谢
-
-- [turboderp/exllamav3](https://github.com/turboderp/exllamav3)(MIT)— 核心引擎
-- [parth-thakre/exl3-rdna4-recipe](https://github.com/parth-thakre/exl3-rdna4-recipe)— RDNA4 decode 优化补丁集
-- [BBQ2077/exl3-windows-gfx1201](https://github.com/BBQ2077/exl3-windows-gfx1201)— Windows 免安装包基线
-- AMD ROCm SDK for Windows
-
-本仓库为非官方社区移植,与 AMD 无关;按上游许可(MIT)分发,详见 [licenses/](licenses/)。
+基于 [ExLlamaV3](https://github.com/turboderp/exllamav3)、[RDNA4 recipe](https://github.com/parth-thakre/exl3-rdna4-recipe) 和 [Windows gfx1201 基线](https://github.com/BBQ2077/exl3-windows-gfx1201)。预编译扩展面向 gfx1201。上游版本与二进制来源见 [provenance.json](provenance.json)，各组件保留[原许可证](licenses/)。

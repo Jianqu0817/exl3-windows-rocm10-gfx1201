@@ -206,7 +206,11 @@ void reconstruct_slice
 // (chunk ^= (row >> 2) & 31) making all phases bank-conflict-free except the 16-lane dequant
 // scatter; both transforms reuse the natural-order Sylvester butterfly (symmetric, so
 // column-then-row order is H W H).
+#if defined(USE_ROCM)
+#define RH_THREADS 512
+#else
 #define RH_THREADS 256
+#endif
 
 template <int K, int cb, bool HALF = false>
 __device__ __forceinline__
@@ -231,7 +235,9 @@ void reconstruct_had_tile
     int n = nb * 8;
     int row_len = gridDim.x * 128;
 
+    #if !defined(USE_ROCM)
     __shared__ uint32_t s_packed[8][8][packed_size / 2];
+    #endif
     __shared__ half2 stile[128 * 64];
 
     auto tix = [&] (int R, int q, int p)
@@ -239,6 +245,7 @@ void reconstruct_had_tile
         return R * 64 + (q ^ ((R >> 2) & 31)) * 2 + p;
     };
 
+    #if !defined(USE_ROCM)
     constexpr int j_int4 = packed_size / 8;
     for (int u = t; u < 8 * 8 * j_int4; u += RH_THREADS)
     {
@@ -250,12 +257,20 @@ void reconstruct_had_tile
     }
     __syncthreads();
 
+    #endif
     for (int jj = 0; jj < 8 * 8 / (RH_THREADS / 32); ++jj)
     {
         int j = (warp_id / 8) * (8 / (RH_THREADS / 256)) + jj;
         int wn = warp_id % 8;
         register FragB frag[2];
+        #if defined(USE_ROCM)
+        // Wave-coalesced cached reads avoid the packed LDS staging area and its barrier.
+        const uint32_t* packed_tile = (const uint32_t*) (g_packed +
+            ((size_t) (kb * 8 + j) * packed_blocks_n + packed_n_offset + n + wn) * packed_size);
+        dq_dispatch<K, cb, HALF>(packed_tile, lane_id * 8, frag[0], frag[1]);
+        #else
         dq_dispatch<K, cb, HALF>(s_packed[j][wn], lane_id * 8, frag[0], frag[1]);
+        #endif
 
         half2 n0 = __shfl_down_sync(0xFFFFFFFF, frag[0][0], 4, 32);
         half2 n1 = __shfl_down_sync(0xFFFFFFFF, frag[0][1], 4, 32);

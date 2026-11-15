@@ -1,3 +1,5 @@
+> 历史基线文档。当前可用入口与实测请看 [README](README.md) 和 [完整工作流](docs/WORKFLOW.md)。
+
 # 精簡執行版驗證結果
 
 ## GPU 與套件

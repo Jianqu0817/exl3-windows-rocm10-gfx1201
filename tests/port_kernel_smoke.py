@@ -8,7 +8,7 @@ import torch
 from exllamav3.ext import exllamav3_ext as ext
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "upstream_tests"))
+sys.path.insert(0, str(ROOT / "tests/upstream"))
 from testlib.exl3 import CODEBOOKS, codebook_flags, generator, linear_ref, rand_linear
 
 checks = 0

@@ -1,3 +1,5 @@
+> 历史基线文档。当前可用入口与实测请看 [README](README.md) 和 [完整工作流](docs/WORKFLOW.md)。
+
 # EXL3 Runtime for AMD RX 9070（gfx1201）— 原生 Windows
 
 在 **原生 Windows** 上用 AMD RX 9070 系列顯卡跑 [ExLlamaV3](https://github.com/turboderp-org/exllamav3)（EXL3 量化模型）的免安裝執行環境。不需要 WSL、Linux、Visual Studio、ROCm／HIP SDK，也不用自己編譯：解壓縮後就能用。

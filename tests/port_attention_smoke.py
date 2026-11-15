@@ -8,11 +8,11 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "build/test-deps"))
-sys.path.insert(0, str(ROOT / "upstream_tests"))
+sys.path.insert(0, str(ROOT / "tests/upstream"))
 import pytest
 
 spec = importlib.util.spec_from_file_location(
-    "decode_layout_checks", ROOT / "upstream_tests/kernels/attention/test_paged_decode_layout.py")
+    "decode_layout_checks", ROOT / "tests/upstream/kernels/attention/test_paged_decode_layout.py")
 checks = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checks)
 count = 0

@@ -1,0 +1,17 @@
+<|im_start|>user
+你是一位认真写作的中文助手。遵守材料事实，直接完成任务，不解释测试过程。
+<背景材料>
+档案记录：青禾在午后整理图书，岚负责温室里的蕨类植物。旧借书证夹在蓝色封面的植物图鉴中，约定见面地点是西侧温室。雨停之后泥土仍湿，两人都记得应先归还图鉴，再检查漏水的木架。这里没有新的见面安排，后续叙事应保持这段关系和地点不变。
+档案记录：青禾在午后整理图书，岚负责温室里的蕨类植物。旧借书证夹在蓝色封面的植物图鉴中，约定见面地点是西侧温室。雨停之后泥土仍湿，两人都记得应先归还图鉴，再检查漏水的木架。这里没有新的见面安排，后续叙事应保持这段关系和地点不变。
+档案记录：青禾在午后整理图书，岚负责温室里的蕨类植物。旧借书证夹在蓝色封面的植物图鉴中，约定见面地点是西侧温室。雨停之后泥土仍湿，两人都记得应先归还图鉴，再检查漏水的木架。这里没有新的见面安排，后续叙事应保持这段关系和地点不变。
+档案记录：青禾在午后整理图书，岚负责温室里的蕨类植物。旧借书证夹在蓝色封面的植物图鉴中，约定见面地点是西侧温室。雨停之后泥土仍湿，两人都记得应先归还图鉴，再检查漏水的木架。这里没有新的见面安排，后续叙事应保持这段关系和地点不变。
+档案记录：青禾在午后整理图书，岚负责温室里的蕨类植物。旧借书证夹在蓝色封面的植物图鉴中，约定见面地点是西侧温室。雨停之后泥土仍湿，两人都记得应先归还图鉴，再检查漏水的木架。这里没有新的见面安排，后续叙事应保持这段关系和地点不变。
+ x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x
+</背景材料>
+请根据上方材料续写一段至少1200字的中文叙事。青禾在雨后的温室与岚见面，两人通过具体行动和自然对话解决旧书归还的误会。保持人物动机连贯，有细节和推进，不要总结故事，不要重复句子。直接从青禾推开温室门写起。
+<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+

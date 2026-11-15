@@ -172,6 +172,7 @@ def init(
     progress: bool = True,
     override_dynamic_seq_len: int | None = None,
     min_draft_len: int = None,
+    early_output_head: bool = False,
     **kwargs
 ):
     """
@@ -288,6 +289,12 @@ def init(
         component = "mtp" if use_mtp else "text",
     ) if draft_model_dir else None
 
+    if early_output_head and model.logit_layer_idx is not None and not args.tensor_parallel:
+        from .modules.linear import Linear
+        head = model.modules[model.logit_layer_idx]
+        if (isinstance(head, Linear) and head.in_features == 5120 and head.out_features == 248320
+                and head.is_exl3_storage(head.key) and torch.cuda.get_device_properties(0).gcnArchName.split(":")[0] == "gfx1201"):
+            head.preload_exl3_trellis(torch.device("cuda:0"))
     # Cache
     max_history = max(
         min_draft_len or 0,

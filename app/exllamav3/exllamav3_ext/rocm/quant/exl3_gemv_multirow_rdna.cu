@@ -992,6 +992,15 @@ static inline int exl3_gemv_wmma_unroll()
     return v >= 4 ? 4 : (v >= 2 ? 2 : 1);
 }
 
+// Opt-in m=4 / K=3 mul1 dispatch to the existing fdot2 body, leaving larger
+// row counts on WMMA. Re-read per call like EXL3_GEMV_WMMA; graphs bake it in.
+static inline bool exl3_gemv_m4_fdot2(int size_m, int K, int cb)
+{
+    if (size_m != 4 || K != 3 || cb != 2) return false;
+    const char* env = std::getenv("EXL3_GEMV_M4_FDOT2");
+    return env && atoi(env) != 0;
+}
+
 template <int bits, bool c_fp32, int cb, int WARPS_PER_BLOCK, int M>
 static __global__
 __launch_bounds__(WARPS_PER_BLOCK * 32)
@@ -1227,7 +1236,8 @@ bool exl3_gemv_multirow_try_launch
     }
 
     // 2w. gfx12 WMMA GEMV (see exl3_gemv_wmma_dot_single), integer bitrates
-    if (exl3_gemv_wmma_enabled(device) && K >= 1 && K <= 8 && size_m >= 2)
+    if (exl3_gemv_wmma_enabled(device) && K >= 1 && K <= 8 && size_m >= 2 &&
+        !exl3_gemv_m4_fdot2(size_m, K, cb))
     {
         const int n_tiles = size_n / 16;
         const int warps = exl3_gemv_mr_warps(size_k, n_tiles, 1);
@@ -1331,7 +1341,8 @@ bool exl3_mgemv_multirow_try_launch
     }
 
     // 2w. gfx12 WMMA GEMV, unweighted single-token calls at integer bitrates
-    if (exl3_gemv_wmma_enabled(device) && !weighted && num_tokens == 1 && K >= 1 && K <= 8 && size_m >= 2)
+    if (exl3_gemv_wmma_enabled(device) && !weighted && num_tokens == 1 && K >= 1 && K <= 8 && size_m >= 2 &&
+        !exl3_gemv_m4_fdot2(size_m, K, cb))
     {
         const int n_tiles = size_n / 16;
         const int warps = exl3_gemv_mr_warps(size_k, n_tiles, bszm);

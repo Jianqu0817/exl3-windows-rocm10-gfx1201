@@ -9,7 +9,7 @@ import torch
 from exllamav3.modules.attention_fn.triton_paged import paged_attn_triton_decode, paged_attn_triton_prefill
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'upstream_tests'))
+sys.path.insert(0, str(ROOT / 'tests/upstream'))
 from testlib.attention import rand_packed_cache
 
 keys = ['EXL3_DEC_Q4W', 'EXL3_DEC_GROUP', 'EXL3_DEC_WARPS', 'EXL3_DEC_BLOCK_N', 'EXL3_DEC_STAGES', 'EXL3_DEC_SPLIT_MULT']

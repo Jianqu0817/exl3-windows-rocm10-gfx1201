@@ -17,6 +17,10 @@ class Graph;
 // takes; 1 switches the path off. Re-read per call.
 int exl3_gemv_max_m();
 
+// EXL3_GEMV_M4_FDOT2=1 routes m=4, integer K=3 mul1 calls to the existing
+// fdot2 core even with WMMA enabled. Default off; other row counts stay on
+// their normal path. Read per call, fixed at graph capture.
+
 // EXL3_ROCM_HALF_GEMV (default on; =0 sends half-integer bitrates back to the
 // cooperative GEMM / mgemm). Callers pass K = EXL3_HALF_BITS(K) (16 + K, see
 // exl3_gemv_tiles_rdna.cuh) for a K + 0.5 bpw mul1 tensor when this is on.

@@ -1,0 +1,32 @@
+{
+  "chat_completion_source": "custom",
+  "custom_api_format": "openai_compat",
+  "custom_url": "http://127.0.0.1:18543/v1",
+  "custom_model": "huihui-qwen3.8-27b",
+  "reverse_proxy": "",
+  "proxy_password": "",
+  "show_external_models": true,
+  "bypass_status_check": false,
+  "temperature": 0.8,
+  "top_p": 1,
+  "top_k": 0,
+  "min_p": 0.08,
+  "repetition_penalty": 1,
+  "frequency_penalty": 0,
+  "presence_penalty": 0,
+  "openai_max_context": 122880,
+  "openai_max_tokens": 1024,
+  "stream_openai": true,
+  "n": 1,
+  "custom_include_body": "enable_thinking: false\nensure_sentence_end: true",
+  "custom_exclude_body": "",
+  "custom_include_headers": "",
+  "additional_parameters_migration_version": 1,
+  "additional_parameters_by_source": {
+    "custom": {
+      "include_body": "enable_thinking: false\nensure_sentence_end: true",
+      "exclude_body": "",
+      "include_headers": ""
+    }
+  }
+}
